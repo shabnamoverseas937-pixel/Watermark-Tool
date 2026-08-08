@@ -23,6 +23,8 @@ const defaultSettings = {
   opacity: 0.85,
   marginPct: 3,
   quality: 92,
+  tile: false,
+  tileSpacing: 60,
 };
 
 function usePersistentSettings() {
@@ -130,6 +132,7 @@ export default function App() {
         const content = await zip.generateAsync({ type: 'blob' });
         saveAs(content, `watermarked-photos-${Date.now()}.zip`);
       }
+      setFiles([]);
     } finally {
       setBusy(false);
     }
@@ -150,7 +153,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" />
-          <span>Watermark Tool</span>
+          <span>Safa Watermark Tool</span>
         </div>
         <p className="tagline">Batch watermark 5–20 photos, right in your browser — iPhone &amp; Android friendly.</p>
       </header>
@@ -278,11 +281,33 @@ export default function App() {
                   Shadow (better contrast)
                 </label>
               </div>
-              <div className="field">
-                <label>Text position</label>
-                <PositionGrid value={settings.position} onChange={(v) => update('position', v)} />
-              </div>
+              {!settings.tile && (
+                <div className="field">
+                  <label>Text position</label>
+                  <PositionGrid value={settings.position} onChange={(v) => update('position', v)} />
+                </div>
+              )}
             </>
+          )}
+
+          <div className="field">
+            <label className="checkbox">
+              <input type="checkbox" checked={settings.tile} onChange={(e) => update('tile', e.target.checked)} />
+              Tile watermark across the whole photo
+            </label>
+          </div>
+
+          {settings.tile && (
+            <div className="field">
+              <label>Tile spacing ({settings.tileSpacing}%)</label>
+              <input
+                type="range"
+                min="0"
+                max="200"
+                value={settings.tileSpacing}
+                onChange={(e) => update('tileSpacing', Number(e.target.value))}
+              />
+            </div>
           )}
 
           {(settings.mode === 'logo' || settings.mode === 'both') && (
@@ -326,10 +351,12 @@ export default function App() {
                   onChange={(e) => update('logoRotation', Number(e.target.value))}
                 />
               </div>
-              <div className="field">
-                <label>Logo position</label>
-                <PositionGrid value={settings.logoPosition} onChange={(v) => update('logoPosition', v)} />
-              </div>
+              {!settings.tile && (
+                <div className="field">
+                  <label>Logo position</label>
+                  <PositionGrid value={settings.logoPosition} onChange={(v) => update('logoPosition', v)} />
+                </div>
+              )}
             </>
           )}
 
