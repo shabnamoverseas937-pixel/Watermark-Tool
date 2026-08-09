@@ -28,6 +28,8 @@ const defaultSettings = {
 };
 
 const PREVIEW_MAX_DIMENSION = 900;
+const SUPPORTS_SHARE =
+  typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
 
 function useDebouncedValue(value, delayMs) {
   const [debounced, setDebounced] = useState(value);
@@ -151,19 +153,23 @@ export default function App() {
     setProgress(0);
     try {
       const logoImg = logoUrl ? await loadImage(logoUrl) : null;
-      if (files.length === 1) {
-        const blob = await renderWatermarkedImage(files[0].file, settings, logoImg);
-        saveAs(blob, watermarkedName(files[0].file.name));
-        setProgress(1);
-      } else {
-        const zip = new JSZip();
-        for (let i = 0; i < files.length; i++) {
-          const blob = await renderWatermarkedImage(files[i].file, settings, logoImg);
-          zip.file(watermarkedName(files[i].file.name), blob);
-          setProgress((i + 1) / files.length);
+      const rendered = [];
+      for (let i = 0; i < files.length; i++) {
+        const blob = await renderWatermarkedImage(files[i].file, settings, logoImg);
+        rendered.push({ blob, name: watermarkedName(files[i].file.name) });
+        setProgress((i + 1) / files.length);
+      }
+
+      const shared = await tryShareFiles(rendered);
+      if (!shared) {
+        if (rendered.length === 1) {
+          saveAs(rendered[0].blob, rendered[0].name);
+        } else {
+          const zip = new JSZip();
+          rendered.forEach(({ blob, name }) => zip.file(name, blob));
+          const content = await zip.generateAsync({ type: 'blob' });
+          saveAs(content, `watermarked-photos-${Date.now()}.zip`);
         }
-        const content = await zip.generateAsync({ type: 'blob' });
-        saveAs(content, `watermarked-photos-${Date.now()}.zip`);
       }
       setFiles([]);
     } finally {
@@ -254,9 +260,16 @@ export default function App() {
               </button>
             )}
             <button className="btn primary" onClick={exportAll} disabled={files.length === 0 || busy}>
-              {busy ? `Processing… ${Math.round(progress * 100)}%` : `Download watermarked (${files.length})`}
+              {busy
+                ? `Processing… ${Math.round(progress * 100)}%`
+                : `${SUPPORTS_SHARE ? 'Save' : 'Download'} watermarked (${files.length})`}
             </button>
           </div>
+          {SUPPORTS_SHARE && files.length > 0 && (
+            <p className="hint share-hint">
+              Choose your Photos/Gallery app in the share menu to save straight to your gallery.
+            </p>
+          )}
         </section>
 
         <section className="panel controls-panel">
@@ -444,6 +457,24 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+async function tryShareFiles(rendered) {
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') {
+    return false;
+  }
+  const shareFiles = rendered.map(({ blob, name }) => new File([blob], name, { type: blob.type }));
+  if (!navigator.canShare({ files: shareFiles })) {
+    return false;
+  }
+  try {
+    await navigator.share({ files: shareFiles });
+    return true;
+  } catch (err) {
+    // AbortError means the user closed the share sheet without picking anything;
+    // don't fall back to a zip download in that case, they chose not to save.
+    return err && err.name === 'AbortError';
+  }
 }
 
 function watermarkedName(originalName) {
