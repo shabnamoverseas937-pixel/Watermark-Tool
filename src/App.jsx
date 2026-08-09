@@ -27,6 +27,17 @@ const defaultSettings = {
   tileSpacing: 60,
 };
 
+const PREVIEW_MAX_DIMENSION = 900;
+
+function useDebouncedValue(value, delayMs) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 function usePersistentSettings() {
   const [settings, setSettings] = useState(() => {
     try {
@@ -84,7 +95,9 @@ export default function App() {
     if (previewIndex >= files.length) setPreviewIndex(0);
   }, [files, previewIndex]);
 
-  // Live preview render (debounced-ish via effect deps)
+  const debouncedSettings = useDebouncedValue(settings, 120);
+
+  // Live preview render, debounced and downscaled so it keeps up while dragging sliders
   useEffect(() => {
     let cancelled = false;
     let objectUrl = null;
@@ -96,7 +109,9 @@ export default function App() {
       const current = files[previewIndex];
       if (!current) return;
       const logoImg = logoUrl ? await loadImage(logoUrl) : null;
-      const blob = await renderWatermarkedImage(current.file, settings, logoImg);
+      const blob = await renderWatermarkedImage(current.file, debouncedSettings, logoImg, {
+        maxDimension: PREVIEW_MAX_DIMENSION,
+      });
       if (cancelled) return;
       objectUrl = URL.createObjectURL(blob);
       setPreviewUrl(objectUrl);
@@ -107,7 +122,7 @@ export default function App() {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files, previewIndex, settings, logoUrl]);
+  }, [files, previewIndex, debouncedSettings, logoUrl]);
 
   const removeFile = (id) => setFiles((prev) => prev.filter((f) => f.id !== id));
   const clearAll = () => setFiles([]);

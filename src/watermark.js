@@ -44,7 +44,7 @@ function loadImage(src) {
   });
 }
 
-export async function renderWatermarkedImage(file, settings, logoImg) {
+export async function renderWatermarkedImage(file, settings, logoImg, { maxDimension } = {}) {
   const url = URL.createObjectURL(file);
   let img;
   try {
@@ -53,11 +53,19 @@ export async function renderWatermarkedImage(file, settings, logoImg) {
     URL.revokeObjectURL(url);
   }
 
+  let targetW = img.naturalWidth;
+  let targetH = img.naturalHeight;
+  if (maxDimension && Math.max(targetW, targetH) > maxDimension) {
+    const downscale = maxDimension / Math.max(targetW, targetH);
+    targetW = Math.round(targetW * downscale);
+    targetH = Math.round(targetH * downscale);
+  }
+
   const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
+  canvas.width = targetW;
+  canvas.height = targetH;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
+  ctx.drawImage(img, 0, 0, targetW, targetH);
 
   const { width: w, height: h } = canvas;
   const margin = (settings.marginPct / 100) * Math.min(w, h);
