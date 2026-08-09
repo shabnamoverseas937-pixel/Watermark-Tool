@@ -53,11 +53,39 @@ function usePersistentSettings() {
   return [settings, setSettings];
 }
 
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function usePersistentLogo() {
+  const [logoUrl, setLogoUrl] = useState(() => {
+    try {
+      return localStorage.getItem('watermark-logo') || null;
+    } catch {
+      return null;
+    }
+  });
+  const setLogo = (dataUrl) => {
+    setLogoUrl(dataUrl);
+    try {
+      if (dataUrl) localStorage.setItem('watermark-logo', dataUrl);
+      else localStorage.removeItem('watermark-logo');
+    } catch {
+      // logo too large for localStorage quota; keep it in memory for this session only
+    }
+  };
+  return [logoUrl, setLogo];
+}
+
 export default function App() {
   const [settings, setSettings] = usePersistentSettings();
   const [files, setFiles] = useState([]); // { id, file, url }
-  const [logoFile, setLogoFile] = useState(null);
-  const [logoUrl, setLogoUrl] = useState(null);
+  const [logoUrl, setLogoUrl] = usePersistentLogo();
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -75,21 +103,11 @@ export default function App() {
     });
   };
 
-  const onLogoSelected = (fileList) => {
+  const onLogoSelected = async (fileList) => {
     const f = fileList[0];
     if (!f) return;
-    setLogoFile(f);
+    setLogoUrl(await fileToDataUrl(f));
   };
-
-  useEffect(() => {
-    if (!logoFile) {
-      setLogoUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(logoFile);
-    setLogoUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [logoFile]);
 
   useEffect(() => {
     if (previewIndex >= files.length) setPreviewIndex(0);
@@ -331,7 +349,7 @@ export default function App() {
                 <label>Logo image</label>
                 <div className="logo-row">
                   <button className="btn ghost" onClick={() => logoInputRef.current?.click()}>
-                    {logoFile ? 'Change logo' : 'Upload logo (PNG recommended)'}
+                    {logoUrl ? 'Change logo' : 'Upload logo (PNG recommended)'}
                   </button>
                   {logoUrl && <img className="logo-thumb" src={logoUrl} alt="Logo" />}
                   <input
